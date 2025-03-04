@@ -15,7 +15,7 @@ class HomeController extends GetxController {
   bool isVideoInitialized = false;
   bool _isDisposed = false;
   RxInt? currentlyPlayingIndex = (-1).obs;
-
+  final RxBool isFullScreen = false.obs;
   RxBool showButton = false.obs;
   Timer? _hideButtonTimer;
   int _playerInitToken = 0;
