@@ -1,16 +1,17 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:mercy_tv_app/Colors/custom_color.dart';
 import 'package:mercy_tv_app/controllers/home_controller.dart';
+import 'package:mercy_tv_app/controllers/rotation_helper.dart';
 import 'package:mercy_tv_app/widget/Live_View_widget.dart';
 import 'package:mercy_tv_app/widget/button_section.dart';
 import 'package:mercy_tv_app/widget/new_screen_player.dart';
 import 'package:mercy_tv_app/API/dataModel.dart';
 import 'package:mercy_tv_app/widget/sugested_video_list.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -21,8 +22,8 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  bool isFavorite = false;
+class _HomePageState extends State<HomePage> {
+  final HomeController homeController = Get.put(HomeController());
   Timer? _timer;
   DateTime _currentDateTime = DateTime.now();
   String _currentVideoUrl = 'https://mercyott.com/hls_output/master.m3u8';
@@ -30,218 +31,99 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _selectedProgramTitle = 'Mercy TV Live';
   String _selectedProgramDate = '';
   String _selectedProgramTime = '';
-  bool _isFullScreen = false;
-
-  // Get HomeController instance
-  HomeController get _homeController => Get.find<HomeController>();
+  StreamSubscription? _orientationSubscription;
 
   @override
   void initState() {
     super.initState();
     _startTimer();
     WakelockPlus.enable();
+    _startOrientationListener();
+  }
 
-    // Initialize HomeController if not already
-    if (!Get.isRegistered<HomeController>()) {
-      Get.put(HomeController());
-    }
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _orientationSubscription?.cancel();
+    homeController.dispose();
+    super.dispose();
+  }
 
-    // Add observer to detect orientation changes
-    WidgetsBinding.instance.addObserver(this);
-
-    // Initialize the player after the widget is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _homeController.initializePlayer(_currentVideoUrl, true);
-
-      // Listen to fullscreen changes from the player
-      if (_homeController.chewieController != null) {
-        _homeController.chewieController!.addListener(_onPlayerFullscreenChanged);
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentDateTime = DateTime.now();
+        });
       }
     });
   }
 
-  void _onPlayerFullscreenChanged() {
-    if (_homeController.chewieController == null) return;
+  Future<void> _launchURL() async {
+    final Uri url = Uri.parse('https://mercytv.tv');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      throw 'Could not launch $url';
+    }
+  }
 
-    final isFullScreen = _homeController.chewieController!.isFullScreen;
+  void _playVideo(ProgramDetails programDetails) {
+    if (!mounted) return;
+    setState(() {
+      _currentVideoUrl = programDetails.videoUrl;
+      _isLiveStream = false;
+      _selectedProgramTitle = programDetails.title;
+      homeController.initializePlayer(programDetails.videoUrl, false);
 
-    if (_isFullScreen != isFullScreen && mounted) {
-      setState(() {
-        _isFullScreen = isFullScreen;
-      });
+      try {
+        if (programDetails.date != null && programDetails.date!.isNotEmpty) {
+          DateTime parsedDate = DateFormat('yyyy-MM-dd').parse(programDetails.date!);
+          _selectedProgramDate = DateFormat('EEE dd MMM').format(parsedDate);
+        } else {
+          _selectedProgramDate = '';
+        }
 
-      // Handle system UI based on fullscreen state
-      if (isFullScreen) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      } else {
-        SystemChrome.setEnabledSystemUIMode(
-            SystemUiMode.manual,
-            overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom]
-        );
+        if (programDetails.time != null && programDetails.time!.isNotEmpty) {
+          DateTime parsedTime = DateFormat('HH:mm:ss').parse(programDetails.time!);
+          _selectedProgramTime = DateFormat('hh:mm a').format(parsedTime);
+        } else {
+          _selectedProgramTime = '';
+        }
+      } catch (e) {
+        log('Error parsing date/time: $e');
+        _selectedProgramDate = programDetails.date ?? '';
+        _selectedProgramTime = programDetails.time ?? '';
       }
-    }
+    });
   }
 
-  @override
-  void didChangeMetrics() {
-    super.didChangeMetrics();
-    if (mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final orientation = MediaQuery.of(context).orientation;
-        final isLandscape = orientation == Orientation.landscape;
+  void _startOrientationListener() {
+    _orientationSubscription = RotationHelper.autoRotateStream.listen((autoRotateOn) {
+      if (!autoRotateOn) return;
 
-        log("didChangeMetrics - Orientation: ${isLandscape ? 'Landscape' : 'Portrait'}");
+      accelerometerEventStream().listen((AccelerometerEvent event) {
+        double x = event.x;
+        double y = event.y;
+        double z = event.z;
 
-        // Ensure orientation can change dynamically
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
+        if (z.abs() > 8) return; // Ignore if device is flat
 
-        _handleOrientationChange(isLandscape);
+        Orientation newOrientation = (y.abs() > x.abs()) ? Orientation.portrait : Orientation.landscape;
+
+        if (homeController.currentOrientation.value != newOrientation) {
+          homeController.currentOrientation.value = newOrientation;
+
+          if (newOrientation == Orientation.landscape) {
+            homeController.chewieController?.enterFullScreen();
+          } else {
+            homeController.chewieController?.exitFullScreen();
+          }
+        }
       });
-    }
-  }
-
-  void _handleOrientationChange(bool isLandscape) {
-    log("*handleOrientationChange - Landscape: $isLandscape");
-
-    // Ensure orientation change logic
-    if (isLandscape) {
-      // Device is in landscape, so force portrait when back is pressed
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]).then((_) {
-        // Restore all orientations after setting to portrait
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-          DeviceOrientation.landscapeRight,
-          DeviceOrientation.landscapeLeft,
-        ]);
-
-        // Update controller state
-        _homeController.currentOrientation.value = Orientation.portrait;
-        _homeController.isFullScreen.value = false;
-
-        // Optional: Ensure system UI is visible
-        SystemChrome.setEnabledSystemUIMode(
-            SystemUiMode.manual,
-            overlays: SystemUiOverlay.values
-        );
-      });
-    } else {
-      // Device is in portrait, update state accordingly
-      _homeController.currentOrientation.value = Orientation.portrait;
-      _homeController.isFullScreen.value = false;
-    }
-  }
-
-  // Toggle full screen method for fullscreen button
-  void _toggleFullScreen() {
-    if (_homeController.chewieController == null) return;
-
-    if (_homeController.chewieController!.isFullScreen) {
-      _homeController.chewieController!.exitFullScreen();
-      setState(() {
-        _isFullScreen = false;
-      });
-    } else {
-      _homeController.chewieController!.enterFullScreen();
-      setState(() {
-        _isFullScreen = true;
-      });
-    }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final orientation = MediaQuery.of(context).orientation;
-    final isLandscape = orientation == Orientation.landscape;
-
-    // If in landscape mode, show only the video player in fullscreen
-    if (isLandscape) {
-      return Scaffold(
-        body: WillPopScope(
-          onWillPop: () async {
-            // When back button is pressed in landscape mode,
-            // return to portrait orientation
-            // When back button is pressed in landscape mode,
-            // return to portrait orientation
-            if (_homeController.chewieController != null &&
-                _homeController.chewieController!.isFullScreen) {
-              _homeController.chewieController!.exitFullScreen();
-            }
-
-            // Explicitly set orientation and reset fullscreen state
-            await SystemChrome.setPreferredOrientations([
-              DeviceOrientation.portraitUp,
-              DeviceOrientation.portraitDown,
-              DeviceOrientation.landscapeLeft,
-              DeviceOrientation.landscapeRight,
-            ]);
-
-            // Update HomeController's state
-            _homeController.currentOrientation.value = Orientation.portrait;
-            _homeController.isFullScreen.value = false;
-
-            setState(() {
-              _isFullScreen = false;
-            });
-
-            // Trigger a rebuild to ensure orientation is updated
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              SystemChrome.setPreferredOrientations([
-                DeviceOrientation.portraitUp,
-                DeviceOrientation.portraitDown,
-                DeviceOrientation.landscapeLeft,
-                DeviceOrientation.landscapeRight,
-              ]);
-            });
-
-            return true;// Don't actually pop, just change orientation
-          },
-          child: Container(
-            color: Colors.black,
-            child: Stack(
-              children: [
-                Center(
-                  child: NewScreenPlayer(),
-                ),
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                    onPressed: () {
-                      // Exit landscape mode and return to portrait
-                      if (_homeController.chewieController != null &&
-                          _homeController.chewieController!.isFullScreen) {
-                        _homeController.chewieController!.exitFullScreen();
-                      }
-
-                      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-                      setState(() {
-                        _isFullScreen = false;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Regular portrait layout
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
@@ -274,13 +156,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
         child: Column(
           children: [
-            Stack(
-              children: [
-                SizedBox(
-                  height: screenHeight * 0.3,
-                  child: NewScreenPlayer(),
-                ),
-              ],
+            SizedBox(
+              height: screenHeight * 0.3,
+              child: NewScreenPlayer(videoUrl: _currentVideoUrl),
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -296,24 +174,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         children: [
                           SizedBox(
                             width: screenWidth * 0.75,
-                            child: GestureDetector(
-                              child: Text(
-                                _selectedProgramTitle,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: titleFontSize,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Mulish-Bold',
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
+                            child: Text(
+                              _selectedProgramTitle,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Mulish-Bold',
                               ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           ),
                           if (_isLiveStream)
                             Padding(
-                              padding: EdgeInsets.symmetric(
-                                  vertical: verticalSpacing * 0.5),
+                              padding: EdgeInsets.symmetric(vertical: verticalSpacing * 0.5),
                               child: const LiveViewWidget(),
                             ),
                         ],
@@ -330,8 +205,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             ),
                           ),
                           SizedBox(width: horizontalPadding * 0.5),
-                          const Text("|",
-                              style: TextStyle(color: Colors.white)),
+                          const Text("|", style: TextStyle(color: Colors.white)),
                           SizedBox(width: horizontalPadding * 0.5),
                           Text(
                             formattedTime,
@@ -352,8 +226,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           width: screenWidth * 0.9,
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius:
-                            BorderRadius.circular(screenWidth * 0.1),
+                            borderRadius: BorderRadius.circular(screenWidth * 0.1),
                           ),
                           child: Center(
                             child: Text(
@@ -361,7 +234,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               style: TextStyle(
                                 color: Colors.black,
                                 fontSize: buttonFontSize,
-                                fontWeight: FontWeight.normal,
+                                fontWeight: FontWeight.bold,
                                 fontFamily: 'Mulish-Medium',
                               ),
                             ),
@@ -370,7 +243,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ),
                       SizedBox(height: verticalSpacing),
                       Text(
-                        'Previous Programs',
+                        'Past Programs',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: baseFontSize + 2,
@@ -384,9 +257,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         height: 2,
                         color: CustomColors.buttonColor,
                       ),
-                      SuggestedVideoCard(
-                        onVideoTap: _playVideo,
-                      ),
+                      SuggestedVideoCard(onVideoTap: _playVideo),
                       SizedBox(height: verticalSpacing * 2),
                     ],
                   ),
@@ -397,90 +268,5 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-
-    // Remove listener
-    if (_homeController.chewieController != null) {
-      _homeController.chewieController!.removeListener(_onPlayerFullscreenChanged);
-    }
-
-    // Reset orientation when disposing
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-
-    // Make sure we exit fullscreen mode when disposing
-    if (_homeController.chewieController != null &&
-        _homeController.chewieController!.isFullScreen) {
-      _homeController.chewieController!.exitFullScreen();
-    }
-
-    WakelockPlus.disable();
-
-    super.dispose();
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _currentDateTime = DateTime.now();
-        });
-      } else {
-        _timer?.cancel();
-      }
-    });
-  }
-
-  Future<void> _launchURL() async {
-    final Uri url = Uri.parse('https://mercytv.tv');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      throw 'Could not launch $url';
-    }
-  }
-
-  void _playVideo(ProgramDetails programDetails) {
-    if (!mounted) return;
-    setState(() {
-      _currentVideoUrl = programDetails.videoUrl;
-      _isLiveStream = false;
-      _selectedProgramTitle = programDetails.title;
-
-      // Initialize player with new video
-      _homeController.initializePlayer(programDetails.videoUrl, false);
-
-      if (programDetails.date != null && programDetails.date!.isNotEmpty) {
-        try {
-          DateTime parsedDate =
-          DateFormat('yyyy-MM-dd').parse(programDetails.date!);
-          _selectedProgramDate = DateFormat('EEE dd MMM').format(parsedDate);
-        } catch (e) {
-          _selectedProgramDate = programDetails.date!;
-        }
-      } else {
-        _selectedProgramDate = '';
-      }
-
-      if (programDetails.time != null && programDetails.time!.isNotEmpty) {
-        try {
-          DateTime parsedTime =
-          DateFormat('HH:mm:ss').parse(programDetails.time!);
-          _selectedProgramTime = DateFormat('hh:mm a').format(parsedTime);
-        } catch (e) {
-          _selectedProgramTime = programDetails.time!;
-        }
-      } else {
-        _selectedProgramTime = '';
-      }
-    });
   }
 }
