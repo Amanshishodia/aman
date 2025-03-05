@@ -45,7 +45,7 @@ class ButtonSection extends StatelessWidget {
           child: GestureDetector(
             onTap: () {
               final String videoUrl = Platform.isIOS
-                  ? 'https://mercytv.tv/' // iOS link
+                  ? 'https://apps.apple.com/in/app/mercy-tv-ott/id6742438839?platform=iphone' // iOS link
                   : 'https://play.google.com/store/apps/details?id=com.mercyott.app'; // Android link
               
               Share.share('Check out this Link: $videoUrl', subject: 'App Link');
