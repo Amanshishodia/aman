@@ -3,6 +3,8 @@ import 'dart:developer';
 
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:get/get_rx/src/rx_types/rx_types.dart';
 import 'package:get/get_state_manager/get_state_manager.dart';
 import 'package:get/route_manager.dart';
@@ -21,7 +23,8 @@ class HomeController extends GetxController {
   int _playerInitToken = 0;
   String _currentVideoUrl = 'https://mercyott.com/hls_output/master.m3u8';
   RxBool isLiveStreamVar = true.obs;
-
+  // Get HomeController instance
+  HomeController get _homeController => Get.find<HomeController>();
   Rx<Orientation> currentOrientation = Orientation.portrait.obs;
 
   Future<void> initializePlayer(String videoUrl, bool isLiveStream) async {
@@ -64,27 +67,69 @@ class HomeController extends GetxController {
       aspectRatio: videoController!.value.aspectRatio,
       autoPlay: true,
       looping: false,
-      showControls: true,
-      allowFullScreen: true,
+      showControls: false,
+      allowFullScreen: false,
       allowPlaybackSpeedChanging: !isLiveStreamVar.value,
       isLive: false,
       fullScreenByDefault: false,
       additionalOptions: (context) {
-        if (isLiveStreamVar.value &&
-            !(chewieController?.isFullScreen ?? false)) {
-          return <OptionItem>[
+        return <OptionItem>[
+          // Add a custom fullscreen toggle option
+          OptionItem(
+            iconData: isFullScreen.value
+                ? Icons.fullscreen_exit
+                : Icons.fullscreen,
+            title: isFullScreen.value
+                ? 'Exit Fullscreen'
+                : 'Fullscreen',
+            onTap: (context) => toggleScreenOrientation(),
+          ),
+          // Existing quality options for live stream
+          if (isLiveStreamVar.value &&
+              !(chewieController?.isFullScreen ?? false))
             OptionItem(
               iconData: Icons.video_settings,
               title: 'Quality',
               onTap: (context) => _showQualityOptions(context),
             )
-          ];
-        }
-        return [];
+        ];
       },
     );
   }
+  // New method to toggle screen orientation
 
+  void toggleScreenOrientation() {
+    // Ensure portrait mode with full orientation support
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.landscapeLeft,
+    ]);
+
+    // Explicitly set to portrait
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]).then((_) {
+      // Restore full orientation support
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.landscapeLeft,
+      ]);
+
+      // Update state
+      _homeController.currentOrientation.value = Orientation.portrait;
+      _homeController.isFullScreen.value = false;
+
+      // Ensure system UI is visible
+      SystemChrome.setEnabledSystemUIMode(
+          SystemUiMode.manual,
+          overlays: SystemUiOverlay.values
+      );
+    });
+  }
   void _showQualityOptions(BuildContext context) {
     if (_isDisposed) return;
     showModalBottomSheet(
@@ -162,6 +207,12 @@ class HomeController extends GetxController {
 
   @override
   void dispose() {
+    // Reset orientation to portrait when disposing
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
     _isDisposed = true;
     _disposeControllers();
     _hideButtonTimer?.cancel();

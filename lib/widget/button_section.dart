@@ -41,7 +41,7 @@ class ButtonSection extends StatelessWidget {
         ),
         const Spacer(),
         Visibility(
-          visible: false, // Hides the share button
+          visible: true, // Hides the share button
           child: GestureDetector(
             onTap: () {
               final String videoUrl = Platform.isIOS

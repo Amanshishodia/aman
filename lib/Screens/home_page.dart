@@ -86,23 +86,56 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeMetrics() {
     super.didChangeMetrics();
     if (mounted) {
-      final orientation = MediaQuery.of(context).orientation;
-      final isLandscape = orientation == Orientation.landscape;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final orientation = MediaQuery.of(context).orientation;
+        final isLandscape = orientation == Orientation.landscape;
 
-      _handleOrientationChange(isLandscape);
+        log("didChangeMetrics - Orientation: ${isLandscape ? 'Landscape' : 'Portrait'}");
+
+        // Ensure orientation can change dynamically
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+
+        _handleOrientationChange(isLandscape);
+      });
     }
   }
 
   void _handleOrientationChange(bool isLandscape) {
-    log("Orientation changed. Is landscape: $isLandscape");
-    log("Current fullscreen state: ${_homeController.chewieController?.isFullScreen}");
+    log("*handleOrientationChange - Landscape: $isLandscape");
 
-    // Only update fullscreen state if needed
-    if (isLandscape && !_homeController.isFullScreen.value) {
-      // Enter fullscreen code
-      _homeController.isFullScreen.value = true;
-    } else if (!isLandscape && _homeController.isFullScreen.value) {
-      // Exit fullscreen code
+    // Ensure orientation change logic
+    if (isLandscape) {
+      // Device is in landscape, so force portrait when back is pressed
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]).then((_) {
+        // Restore all orientations after setting to portrait
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeRight,
+          DeviceOrientation.landscapeLeft,
+        ]);
+
+        // Update controller state
+        _homeController.currentOrientation.value = Orientation.portrait;
+        _homeController.isFullScreen.value = false;
+
+        // Optional: Ensure system UI is visible
+        SystemChrome.setEnabledSystemUIMode(
+            SystemUiMode.manual,
+            overlays: SystemUiOverlay.values
+        );
+      });
+    } else {
+      // Device is in portrait, update state accordingly
+      _homeController.currentOrientation.value = Orientation.portrait;
       _homeController.isFullScreen.value = false;
     }
   }
@@ -136,16 +169,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onWillPop: () async {
             // When back button is pressed in landscape mode,
             // return to portrait orientation
+            // When back button is pressed in landscape mode,
+            // return to portrait orientation
             if (_homeController.chewieController != null &&
                 _homeController.chewieController!.isFullScreen) {
               _homeController.chewieController!.exitFullScreen();
             }
 
-            SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+            // Explicitly set orientation and reset fullscreen state
+            await SystemChrome.setPreferredOrientations([
+              DeviceOrientation.portraitUp,
+              DeviceOrientation.portraitDown,
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ]);
+
+            // Update HomeController's state
+            _homeController.currentOrientation.value = Orientation.portrait;
+            _homeController.isFullScreen.value = false;
+
             setState(() {
               _isFullScreen = false;
             });
-            return false; // Don't actually pop, just change orientation
+
+            // Trigger a rebuild to ensure orientation is updated
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              SystemChrome.setPreferredOrientations([
+                DeviceOrientation.portraitUp,
+                DeviceOrientation.portraitDown,
+                DeviceOrientation.landscapeLeft,
+                DeviceOrientation.landscapeRight,
+              ]);
+            });
+
+            return true;// Don't actually pop, just change orientation
           },
           child: Container(
             color: Colors.black,
@@ -222,18 +279,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 SizedBox(
                   height: screenHeight * 0.3,
                   child: NewScreenPlayer(),
-                ),
-                Positioned(
-                  right: 10,
-                  bottom: 10,
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.fullscreen,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                    onPressed: _toggleFullScreen,
-                  ),
                 ),
               ],
             ),
@@ -325,7 +370,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ),
                       SizedBox(height: verticalSpacing),
                       Text(
-                        'Past Programs',
+                        'Previous Programs',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: baseFontSize + 2,
