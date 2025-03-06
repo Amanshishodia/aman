@@ -33,6 +33,9 @@ class _HomePageState extends State<HomePage> {
   String _selectedProgramTime = '';
   StreamSubscription? _orientationSubscription;
 
+  // Add a key for the player widget to force rebuild
+  final Key _playerKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -68,11 +71,25 @@ class _HomePageState extends State<HomePage> {
 
   void _playVideo(ProgramDetails programDetails) {
     if (!mounted) return;
+
+    // Log the video URL for debugging
+    log('Playing video: ${programDetails.videoUrl}');
+
+    if (programDetails.videoUrl.isEmpty) {
+      // Show error if URL is empty
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Video URL not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _currentVideoUrl = programDetails.videoUrl;
       _isLiveStream = false;
       _selectedProgramTitle = programDetails.title;
-      homeController.initializePlayer(programDetails.videoUrl, false);
 
       try {
         if (programDetails.date != null && programDetails.date!.isNotEmpty) {
@@ -93,6 +110,16 @@ class _HomePageState extends State<HomePage> {
         _selectedProgramDate = programDetails.date ?? '';
         _selectedProgramTime = programDetails.time ?? '';
       }
+    });
+
+    // Scroll to player position
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.0,
+      );
     });
   }
 
@@ -163,7 +190,11 @@ class _HomePageState extends State<HomePage> {
             SizedBox(
               height: screenHeight * 0.3,
               width: screenWidth,
-              child: NewScreenPlayer(videoUrl: _currentVideoUrl, isLiveStream: _isLiveStream),
+              child: NewScreenPlayer(
+                key: ValueKey(_currentVideoUrl), // Use ValueKey with URL to force rebuild
+                videoUrl: _currentVideoUrl,
+                isLiveStream: _isLiveStream,
+              ),
             ),
             // Content section that uses SafeArea
             Expanded(
