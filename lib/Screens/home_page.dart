@@ -148,11 +148,11 @@ class _HomePageState extends State<HomePage> {
       });
     });
   }
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
+    final padding = MediaQuery.of(context).padding;
 
     double baseFontSize = screenWidth < 360 ? 14 : 16;
     double titleFontSize = screenWidth < 360 ? 18 : 22;
@@ -182,131 +182,132 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         child: Column(
-          children: [
-            // Video player section that doesn't use SafeArea
-            SizedBox(
-              height: screenHeight * 0.06,
-            ),
-            SizedBox(
-              height: screenHeight * 0.3,
-              width: screenWidth,
-              child: NewScreenPlayer(
-                key: ValueKey(_currentVideoUrl), // Use ValueKey with URL to force rebuild
-                videoUrl: _currentVideoUrl,
-                isLiveStream: _isLiveStream,
-              ),
-            ),
-            // Content section that uses SafeArea
-            Expanded(
-              child: SafeArea(
-                top: false, // Important! Don't add safe area padding at the top
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: horizontalPadding,
-                      vertical: verticalSpacing,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: screenWidth * 0.72,
-                              child: Text(
-                                _selectedProgramTitle,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: titleFontSize,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Mulish-Bold',
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                              ),
-                            ),
-                            if (_isLiveStream)
-                              Padding(
-                                padding: EdgeInsets.symmetric(vertical: verticalSpacing * 0.5, horizontal: verticalSpacing * 0.1),
-                                child: const LiveViewWidget(),
-                              ),
-                          ],
-                        ),
-                        SizedBox(height: verticalSpacing),
-                        Row(
-                          children: [
-                            Text(
-                              formattedDate,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: baseFontSize,
-                                fontFamily: 'Mulish-Medium',
-                              ),
-                            ),
-                            SizedBox(width: horizontalPadding * 0.5),
-                            const Text("|", style: TextStyle(color: Colors.white)),
-                            SizedBox(width: horizontalPadding * 0.5),
-                            Text(
-                              formattedTime,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: baseFontSize,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: verticalSpacing),
-                        const ButtonSection(),
-                        SizedBox(height: verticalSpacing * 2),
-                        GestureDetector(
-                          onTap: _launchURL,
-                          child: Container(
-                            height: screenHeight * 0.06,
-                            width: screenWidth * 0.9,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(screenWidth * 0.1),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Visit Website',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: buttonFontSize,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Mulish-Medium',
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: verticalSpacing),
-                        Text(
-                          'Past Programs',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: baseFontSize + 2,
-                            fontWeight: FontWeight.w300,
-                            fontFamily: 'Mulish-Medium',
-                          ),
-                        ),
-                        SizedBox(height: verticalSpacing * 0.5),
-                        Container(
-                          width: screenWidth * 0.35,
-                          height: 2,
-                          color: CustomColors.buttonColor,
-                        ),
-                        SuggestedVideoCard(onVideoTap: _playVideo),
-                        SizedBox(height: verticalSpacing * 2),
-                      ],
-                    ),
+            children: [
+        // Add padding only at the top for status bar
+              SafeArea(
+                bottom: false, // No bottom safety padding
+                left: false,   // No left safety padding
+                right: false,  // No right safety padding
+                child: SizedBox(
+                  height: screenHeight * 0.3,
+                  width: screenWidth,
+                  child: NewScreenPlayer(
+                    key: ValueKey(_currentVideoUrl),
+                    videoUrl: _currentVideoUrl,
+                    isLiveStream: _isLiveStream,
                   ),
                 ),
               ),
+
+              // Content section
+      Expanded(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalSpacing,
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Rest of your UI remains the same
+                Row(
+                  children: [
+                    SizedBox(
+                      width: screenWidth * 0.72,
+                      child: Text(
+                        _selectedProgramTitle,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: titleFontSize,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Mulish-Bold',
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                    if (_isLiveStream)
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: verticalSpacing * 0.5, horizontal: verticalSpacing * 0.1),
+                        child: const LiveViewWidget(),
+                      ),
+                  ],
+                ),
+                          SizedBox(height: verticalSpacing),
+                          Row(
+                            children: [
+                              Text(
+                                formattedDate,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: baseFontSize,
+                                  fontFamily: 'Mulish-Medium',
+                                ),
+                              ),
+                              SizedBox(width: horizontalPadding * 0.5),
+                              const Text("|", style: TextStyle(color: Colors.white)),
+                              SizedBox(width: horizontalPadding * 0.5),
+                              Text(
+                                formattedTime,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: baseFontSize,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: verticalSpacing),
+                          const ButtonSection(),
+                          SizedBox(height: verticalSpacing * 2),
+                          GestureDetector(
+                            onTap: _launchURL,
+                            child: Container(
+                              height: screenHeight * 0.06,
+                              width: screenWidth * 0.9,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(screenWidth * 0.1),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Visit Website',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontSize: buttonFontSize,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Mulish-Medium',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: verticalSpacing),
+                          Text(
+                            'Past Programs',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: baseFontSize + 2,
+                              fontWeight: FontWeight.w300,
+                              fontFamily: 'Mulish-Medium',
+                            ),
+                          ),
+                          SizedBox(height: verticalSpacing * 0.5),
+                          Container(
+                            width: screenWidth * 0.35,
+                            height: 2,
+                            color: CustomColors.buttonColor,
+                          ),
+                          SuggestedVideoCard(onVideoTap: _playVideo),
+                          SizedBox(height: verticalSpacing * 2),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
   }
 }
