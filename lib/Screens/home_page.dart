@@ -156,110 +156,119 @@ class _HomePageState extends State<HomePage> {
         ),
         child: Column(
           children: [
+            // Video player section that doesn't use SafeArea
+            SizedBox(
+              height: screenHeight * 0.06,
+            ),
             SizedBox(
               height: screenHeight * 0.3,
-              child: NewScreenPlayer(videoUrl: _currentVideoUrl),
+              width: screenWidth,
+              child: NewScreenPlayer(videoUrl: _currentVideoUrl, isLiveStream: _isLiveStream),
             ),
+            // Content section that uses SafeArea
             Expanded(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: horizontalPadding,
-                    vertical: verticalSpacing,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: screenWidth * 0.75,
-                            child: Text(
-                              _selectedProgramTitle,
+              child: SafeArea(
+                top: false, // Important! Don't add safe area padding at the top
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                      vertical: verticalSpacing,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: screenWidth * 0.72,
+                              child: Text(
+                                _selectedProgramTitle,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: titleFontSize,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Mulish-Bold',
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                            if (_isLiveStream)
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: verticalSpacing * 0.5, horizontal: verticalSpacing * 0.1),
+                                child: const LiveViewWidget(),
+                              ),
+                          ],
+                        ),
+                        SizedBox(height: verticalSpacing),
+                        Row(
+                          children: [
+                            Text(
+                              formattedDate,
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: titleFontSize,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Mulish-Bold',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ),
-                          if (_isLiveStream)
-                            Padding(
-                              padding: EdgeInsets.symmetric(vertical: verticalSpacing * 0.5),
-                              child: const LiveViewWidget(),
-                            ),
-                        ],
-                      ),
-                      SizedBox(height: verticalSpacing),
-                      Row(
-                        children: [
-                          Text(
-                            formattedDate,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: baseFontSize,
-                              fontFamily: 'Mulish-Medium',
-                            ),
-                          ),
-                          SizedBox(width: horizontalPadding * 0.5),
-                          const Text("|", style: TextStyle(color: Colors.white)),
-                          SizedBox(width: horizontalPadding * 0.5),
-                          Text(
-                            formattedTime,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: baseFontSize,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: verticalSpacing),
-                      const ButtonSection(),
-                      SizedBox(height: verticalSpacing * 2),
-                      GestureDetector(
-                        onTap: _launchURL,
-                        child: Container(
-                          height: screenHeight * 0.06,
-                          width: screenWidth * 0.9,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(screenWidth * 0.1),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Visit Website',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontSize: buttonFontSize,
-                                fontWeight: FontWeight.bold,
+                                fontSize: baseFontSize,
                                 fontFamily: 'Mulish-Medium',
                               ),
                             ),
+                            SizedBox(width: horizontalPadding * 0.5),
+                            const Text("|", style: TextStyle(color: Colors.white)),
+                            SizedBox(width: horizontalPadding * 0.5),
+                            Text(
+                              formattedTime,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: baseFontSize,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: verticalSpacing),
+                        const ButtonSection(),
+                        SizedBox(height: verticalSpacing * 2),
+                        GestureDetector(
+                          onTap: _launchURL,
+                          child: Container(
+                            height: screenHeight * 0.06,
+                            width: screenWidth * 0.9,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(screenWidth * 0.1),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Visit Website',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: buttonFontSize,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Mulish-Medium',
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      SizedBox(height: verticalSpacing),
-                      Text(
-                        'Past Programs',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: baseFontSize + 2,
-                          fontWeight: FontWeight.w300,
-                          fontFamily: 'Mulish-Medium',
+                        SizedBox(height: verticalSpacing),
+                        Text(
+                          'Past Programs',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: baseFontSize + 2,
+                            fontWeight: FontWeight.w300,
+                            fontFamily: 'Mulish-Medium',
+                          ),
                         ),
-                      ),
-                      SizedBox(height: verticalSpacing * 0.5),
-                      Container(
-                        width: screenWidth * 0.35,
-                        height: 2,
-                        color: CustomColors.buttonColor,
-                      ),
-                      SuggestedVideoCard(onVideoTap: _playVideo),
-                      SizedBox(height: verticalSpacing * 2),
-                    ],
+                        SizedBox(height: verticalSpacing * 0.5),
+                        Container(
+                          width: screenWidth * 0.35,
+                          height: 2,
+                          color: CustomColors.buttonColor,
+                        ),
+                        SuggestedVideoCard(onVideoTap: _playVideo),
+                        SizedBox(height: verticalSpacing * 2),
+                      ],
+                    ),
                   ),
                 ),
               ),

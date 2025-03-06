@@ -187,30 +187,10 @@ class _NewScreenPlayerState extends State<NewScreenPlayer> with WidgetsBindingOb
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Stack(
-      children: [
-        // Video Player
-        Center(
-          child: _chewieController != null
-              ? Chewie(controller: _chewieController!)
-              : const CircularProgressIndicator(),
-        ),
-
-        // Manual Full Screen Button
-        Positioned(
-          bottom: 10,
-          right: 10,
-          child: IconButton(
-            icon: Icon(
-              _chewieController!.isFullScreen
-                  ? Icons.fullscreen_exit
-                  : Icons.fullscreen,
-              color: Colors.white,
-            ),
-            onPressed: _toggleFullScreen,
-          ),
-        ),
-      ],
+    return Center(
+      child: _chewieController != null
+          ? Chewie(controller: _chewieController!)
+          : const CircularProgressIndicator(),
     );
   }
 
