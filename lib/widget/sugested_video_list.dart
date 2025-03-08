@@ -1,88 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:mercy_tv_app/API/api_integration.dart';
-import 'package:mercy_tv_app/API/dataModel.dart';
 import 'package:mercy_tv_app/Colors/custom_color.dart';
 import 'package:mercy_tv_app/controllers/home_controller.dart';
+import 'package:mercy_tv_app/API/dataModel.dart';
 
-class SuggestedVideoCard extends StatefulWidget {
+class SuggestedVideoCard extends StatelessWidget {
   final void Function(ProgramDetails) onVideoTap;
 
   const SuggestedVideoCard({super.key, required this.onVideoTap});
 
   @override
-  _SuggestedVideoCardState createState() => _SuggestedVideoCardState();
-}
-
-class _SuggestedVideoCardState extends State<SuggestedVideoCard> {
-  late Future<List<dynamic>> _videoDataFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _videoDataFuture = fetchSortedVideoData();
-  }
-
-  Future<List<dynamic>> fetchSortedVideoData() async {
-    List<dynamic> data = await ApiIntegration().getVideoData();
-
-    data.sort(
-        (a, b) => int.parse(b['video_id']).compareTo(int.parse(a['video_id'])));
-
-    return data;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final HomeController homeController = Get.put(HomeController());
-    return FutureBuilder(
-      future: _videoDataFuture,
-      builder: (context, AsyncSnapshot snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(child: Text('Error: \${snapshot.error}'));
-        } else if (!snapshot.hasData || snapshot.data.isEmpty) {
-          return const Center(child: Text('No videos available'));
-        } else {
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 15,
-              childAspectRatio: 1.5,
-            ),
-            itemCount: snapshot.data.length,
-            itemBuilder: (context, index) {
-              var video = snapshot.data[index];
-              var program = video['program'] ?? {};
+    final HomeController homeController = Get.find<HomeController>(); // Access existing controller
 
-              ProgramDetails programDetails = ProgramDetails(
-                imageUrl: program['image'],
-                date: program['date'],
-                time: program['time'],
-                title: program['program'] ?? 'Unknown Program',
-                videoUrl: video['url'],
-              );
+    return Obx(() {
+      if (homeController.suggestedVideos.isEmpty && !homeController.isLoading.value) {
+        return const Center(child: Text('No videos available'));
+      }
 
-              return Obx(
-                () => VideoThumbnailCard(
-                  programDetails: programDetails,
-                  isPlaying:
-                      homeController.currentlyPlayingIndex?.value == index,
-                  onTap: (details) {
-                    homeController.currentlyPlayingIndex?.value = index;
-                    widget.onVideoTap(details);
-                  },
-                ),
-              );
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 15,
+          childAspectRatio: 1.5,
+        ),
+        itemCount: homeController.suggestedVideos.length,
+        itemBuilder: (context, index) {
+          final programDetails = homeController.suggestedVideos[index];
+
+          return VideoThumbnailCard(
+            programDetails: programDetails,
+            isPlaying: homeController.currentlyPlayingIndex.value == index,
+            onTap: (details) {
+              homeController.currentlyPlayingIndex.value = index;
+              onVideoTap(details);
             },
           );
-        }
-      },
-    );
+        },
+      );
+    });
   }
 }
 
@@ -187,8 +146,7 @@ class VideoThumbnailCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                   image: const DecorationImage(
                     image: AssetImage('assets/images/transparent.png'),
-                    fit: BoxFit
-                        .cover,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
