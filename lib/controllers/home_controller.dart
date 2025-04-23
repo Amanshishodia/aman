@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:mercy_tv_app/API/api_integration.dart'; // Your API integration
+import 'package:mercy_tv_app/API/dataModel.dart'; // Your data model
 
 class HomeController extends GetxController with WidgetsBindingObserver {
   Rx<Orientation> currentOrientation = Orientation.portrait.obs;
@@ -16,6 +17,14 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   VideoPlayerController? videoPlayerController;
   ChewieController? chewieController;
   RxBool isVideoInitialized = false.obs;
+
+  // Pagination variables for suggested videos
+  RxList<ProgramDetails> suggestedVideos = <ProgramDetails>[].obs; // List of videos
+  RxBool isLoading = false.obs; // Loading state
+  RxBool hasMore = true.obs; // Whether more data is available
+  int pageSize = 6; // Load 6 videos at a time
+  int currentPage = 0; // Current page number
+  List<dynamic> _allVideoData = []; // Store all data locally if API doesn't paginate
 
   bool _isDisposed = false;
   Timer? _hideButtonTimer;
@@ -37,6 +46,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
     // Initialize player with default URL
     initializePlayer(_currentVideoUrl, true);
+
+    // Fetch initial batch of suggested videos
+    fetchSuggestedVideos();
   }
 
   @override
@@ -74,6 +86,65 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     });
   }
 
+  // Fetch suggested videos with pagination
+  Future<void> fetchSuggestedVideos() async {
+    if (isLoading.value || !hasMore.value) return;
+
+    isLoading.value = true;
+    try {
+      // Fetch data from API (modify this based on your API's pagination support)
+      List<dynamic> newVideoData = await _fetchVideoData(currentPage, pageSize);
+
+      if (newVideoData.isEmpty) {
+        hasMore.value = false; // No more data to load
+      } else {
+        // Convert raw API data to ProgramDetails
+        List<ProgramDetails> newVideos = newVideoData.map((video) {
+          var program = video['program'] ?? {};
+          return ProgramDetails(
+            imageUrl: program['image'],
+            date: program['date'],
+            time: program['time'],
+            title: program['program'] ?? 'Unknown Program',
+            videoUrl: video['url'],
+          );
+        }).toList();
+
+        suggestedVideos.addAll(newVideos);
+        currentPage++;
+      }
+    } catch (e) {
+      log('Error fetching videos: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Fetch video data (with pagination if API supports it, otherwise local pagination)
+  Future<List<dynamic>> _fetchVideoData(int page, int size) async {
+    // Option 1: If your API supports pagination
+    // Replace this with your actual paginated API call
+    // Example: List<dynamic> data = await ApiIntegration().getVideoData(page: page, size: size);
+
+    // Option 2: If your API doesn't support pagination, fetch all once and paginate locally
+    if (_allVideoData.isEmpty) {
+      _allVideoData = await ApiIntegration().getVideoData();
+      _allVideoData.sort(
+          (a, b) => int.parse(b['video_id']).compareTo(int.parse(a['video_id'])));
+    }
+
+    // Paginate locally
+    int startIndex = page * size;
+    if (startIndex >= _allVideoData.length) {
+      return [];
+    }
+    int endIndex = startIndex + size;
+    if (endIndex > _allVideoData.length) {
+      endIndex = _allVideoData.length;
+    }
+    return _allVideoData.sublist(startIndex, endIndex);
+  }
+
   void _handleOrientationChange(Orientation orientation) {
     if (orientation == Orientation.landscape) {
       _enterFullScreen();
@@ -88,7 +159,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         chewieController!.enterFullScreen();
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       } catch (e) {
-        print('Error entering full screen: $e');
+        log('Error entering full screen: $e');
       }
     }
   }
@@ -102,7 +173,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
           overlays: SystemUiOverlay.values,
         );
       } catch (e) {
-        print('Error exiting full screen: $e');
+        log('Error exiting full screen: $e');
       }
     }
   }
@@ -124,7 +195,6 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _currentVideoUrl = videoUrl;
 
     try {
-      // Create a new video player controller with appropriate options for live streaming
       videoPlayerController = VideoPlayerController.networkUrl(
         Uri.parse(videoUrl),
         videoPlayerOptions: isLiveStream
@@ -132,13 +202,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
             : null,
       );
 
-      // Initialize the controller
       await videoPlayerController!.initialize();
 
-      // Check if still valid (not disposed or superseded by another initialization)
       if (_isDisposed || currentToken != _playerInitToken) return;
 
-      // Create Chewie controller with robust configuration
       chewieController = ChewieController(
         videoPlayerController: videoPlayerController!,
         autoPlay: true,
@@ -186,14 +253,12 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       isVideoInitialized.value = true;
       isLiveStreamVar.value = isLiveStream;
 
-      // If it's a live stream, ensure it's playing
       if (isLiveStream) {
         videoPlayerController!.play();
       }
 
       update();
 
-      // Check current orientation on initialization
       if (!_isDisposed && Get.context != null) {
         final mediaQuery = MediaQuery.of(Get.context!);
         if (mediaQuery.orientation == Orientation.landscape) {
@@ -205,7 +270,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         isVideoInitialized.value = false;
         update();
       }
-      print('Error initializing video player: $e');
+      log('Error initializing video player: $e');
     }
   }
 
@@ -244,14 +309,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _changeVideoQuality(String videoUrl) async {
-    // Close quality bottom sheet if open
     Get.back();
     log('Changing quality to: $videoUrl');
 
-    // Allow a brief delay for UI to settle
     await Future.delayed(const Duration(milliseconds: 200));
-
-    // Initialize with new quality URL, maintaining live stream state
     initializePlayer(videoUrl, true);
   }
 
@@ -269,14 +330,13 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
       isVideoInitialized.value = false;
     } catch (e) {
-      print('Error during controller disposal: $e');
+      log('Error during controller disposal: $e');
     }
   }
 
   void onScreenTapped() {
     showButton.value = true;
 
-    // Auto-hide the button after a delay
     _hideButtonTimer?.cancel();
     _hideButtonTimer = Timer(const Duration(seconds: 4), () {
       if (!_isDisposed) {

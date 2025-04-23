@@ -65,7 +65,7 @@ class _NewScreenPlayerState extends State<NewScreenPlayer> {
                     ? Colors.red
                     : const Color(0xFF8DBDCC),
                     () {
-                  homeController.currentlyPlayingIndex?.value = -1;
+                  homeController.currentlyPlayingIndex.value = -1;
                   homeController.initializePlayer(
                       'https://mercyott.com/hls_output/master.m3u8', true);
                 },
